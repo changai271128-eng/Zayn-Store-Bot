@@ -18,7 +18,7 @@ TICKET_CHANNEL_ID = 1542650866987835484
 STOCK_CHANNEL_ID = 1542650898432524378    
 
 # 🚨 ضع الـ ID الخاص بحسابك في ديسكورد هنا بدلاً من هذا الرقم لكي لا يتحكم أحد غيرك في البوت
-AUTHORIZED_USERS = [123456789012345678]
+AUTHORIZED_USERS = [1296895463097897015]
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com', 'Mtjr-OW', 'Mada-R', 'Linkin.sa']
 CURRENCIES = {'USD': 1.0, 'SAR': 3.75, 'AED': 3.67}
