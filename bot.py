@@ -223,5 +223,17 @@ async def background_sales():
         t_embed.set_footer(text="Choose an action below:")
         
         await ticket_chan.send(embed=t_embed, view=TicketActionView(oid, masked_email))
+from flask import Flask
+from threading import Thread
+
+app = Flask(__name__)
+@app.route('/')
+def home():
+    return "Bot is Online 24/7!"
+
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+Thread(target=run).start()
 
 bot.run(TOKEN)
