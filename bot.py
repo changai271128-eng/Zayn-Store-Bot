@@ -18,12 +18,34 @@ AUTHORIZED_USERS = [1296895463097897015]
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
 MY_WALLETS = {"USDT (TRC20)": 0.0, "BTC": 0.0, "LTC": 0.0, "Bank Account (SAR)": 0.0}
-
 CRYPTO_RATES = {"USDT (TRC20)": 1.0, "BTC": 64000.0, "LTC": 85.0}
 
+# القائمة الضخمة للمنتجات والأسعار (24 منتج لضمان توافق القائمة المنسدلة في ديسكورد)
 PRICES = {
-    "ChatGPT Plus": {"Account": {"1 Month": 10.0, "1 Year": 90.0}, "Activation Link": {"1 Month": 12.0, "1 Year": 110.0}, "Gift Card": {"1 Month": 15.0, "1 Year": 150.0}},
-    "Claude Pro": {"Account": {"1 Month": 18.0, "1 Year": 160.0}, "Activation Link": {"1 Month": 22.0, "1 Year": 200.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 240.0}}
+    "ChatGPT Plus": {"Account": {"1 Month": 9.0, "1 Year": 90.0}, "Activation Link": {"1 Month": 12.0, "1 Year": 110.0}, "Gift Card": {"1 Month": 15.0, "1 Year": 150.0}},
+    "ChatGPT Pro": {"Account": {"1 Month": 45.0, "1 Year": 450.0}, "Activation Link": {"1 Month": 48.0, "1 Year": 480.0}, "Gift Card": {"1 Month": 55.0, "1 Year": 550.0}},
+    "ChatGPT Business": {"Account": {"1 Month": 80.0, "1 Year": 800.0}, "Activation Link": {"1 Month": 85.0, "1 Year": 850.0}, "Gift Card": {"1 Month": 90.0, "1 Year": 900.0}},
+    "Claude Pro": {"Account": {"1 Month": 20.0, "1 Year": 200.0}, "Activation Link": {"1 Month": 23.0, "1 Year": 230.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 250.0}},
+    "Claude Max": {"Account": {"1 Month": 140.0, "1 Year": 1400.0}, "Activation Link": {"1 Month": 145.0, "1 Year": 1450.0}, "Gift Card": {"1 Month": 150.0, "1 Year": 1500.0}},
+    "Gemini Pro": {"Account": {"1 Month": 5.0, "1 Year": 50.0}, "Activation Link": {"1 Month": 7.5, "1 Year": 75.0}}, # بدون جيفت كارد
+    "Midjourney Basic": {"Account": {"1 Month": 4.5, "1 Year": 45.0}, "Activation Link": {"1 Month": 5.0, "1 Year": 50.0}, "Gift Card": {"1 Month": 6.0, "1 Year": 60.0}},
+    "Midjourney Standard": {"Account": {"1 Month": 8.0, "1 Year": 80.0}, "Activation Link": {"1 Month": 10.0, "1 Year": 100.0}, "Gift Card": {"1 Month": 12.0, "1 Year": 120.0}},
+    "Midjourney Pro": {"Account": {"1 Month": 20.0, "1 Year": 200.0}, "Activation Link": {"1 Month": 22.0, "1 Year": 220.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 250.0}},
+    "Perplexity Pro": {"Account": {"1 Month": 5.0, "1 Year": 25.0}, "Activation Link": {"1 Month": 6.0, "1 Year": 30.0}, "Gift Card": {"1 Month": 7.0, "1 Year": 35.0}},
+    "GitHub Copilot Individual": {"Account": {"1 Month": 3.0, "1 Year": 30.0}, "Activation Link": {"1 Month": 4.0, "1 Year": 40.0}, "Gift Card": {"1 Month": 5.0, "1 Year": 50.0}},
+    "GitHub Copilot Business": {"Account": {"1 Month": 10.0, "1 Year": 100.0}, "Activation Link": {"1 Month": 12.0, "1 Year": 120.0}, "Gift Card": {"1 Month": 15.0, "1 Year": 150.0}},
+    "Canva Pro": {"Account": {"1 Month": 1.0, "1 Year": 10.0}, "Activation Link": {"1 Month": 1.5, "1 Year": 12.0}, "Gift Card": {"1 Month": 2.0, "1 Year": 15.0}},
+    "Notion AI": {"Account": {"1 Month": 5.0, "1 Year": 20.0}, "Activation Link": {"1 Month": 6.0, "1 Year": 25.0}, "Gift Card": {"1 Month": 7.0, "1 Year": 30.0}},
+    "ElevenLabs Creator": {"Account": {"1 Month": 20.0, "1 Year": 200.0}, "Activation Link": {"1 Month": 22.0, "1 Year": 220.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 250.0}},
+    "ElevenLabs Pro": {"Account": {"1 Month": 80.0, "1 Year": 800.0}, "Activation Link": {"1 Month": 85.0, "1 Year": 850.0}, "Gift Card": {"1 Month": 90.0, "1 Year": 900.0}},
+    "Leonardo AI Apprentice": {"Account": {"1 Month": 10.0, "1 Year": 100.0}, "Activation Link": {"1 Month": 12.0, "1 Year": 120.0}, "Gift Card": {"1 Month": 15.0, "1 Year": 150.0}},
+    "Leonardo AI Artisan": {"Account": {"1 Month": 15.0, "1 Year": 150.0}, "Activation Link": {"1 Month": 18.0, "1 Year": 180.0}, "Gift Card": {"1 Month": 20.0, "1 Year": 200.0}},
+    "Grammarly Premium": {"Account": {"1 Month": 5.0, "1 Year": 9.0}, "Activation Link": {"1 Month": 6.0, "1 Year": 12.0}, "Gift Card": {"1 Month": 7.0, "1 Year": 15.0}},
+    "Jasper AI Pro": {"Account": {"1 Month": 20.0, "1 Year": 200.0}, "Activation Link": {"1 Month": 22.0, "1 Year": 220.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 250.0}},
+    "Copy.ai Pro": {"Account": {"1 Month": 4.0, "1 Year": 40.0}, "Activation Link": {"1 Month": 5.0, "1 Year": 50.0}, "Gift Card": {"1 Month": 6.0, "1 Year": 60.0}},
+    "Runway ML Pro": {"Account": {"1 Month": 21.0, "1 Year": 210.0}, "Activation Link": {"1 Month": 23.0, "1 Year": 230.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 250.0}},
+    "Synthesia Starter": {"Account": {"1 Month": 9.0, "1 Year": 90.0}, "Activation Link": {"1 Month": 10.0, "1 Year": 100.0}, "Gift Card": {"1 Month": 12.0, "1 Year": 120.0}},
+    "Character.ai c.ai+": {"Account": {"1 Month": 4.0, "1 Year": 40.0}, "Activation Link": {"1 Month": 5.0, "1 Year": 50.0}, "Gift Card": {"1 Month": 6.0, "1 Year": 60.0}}
 }
 
 INVENTORY_FILE = 'master_inventory.json'
@@ -34,6 +56,28 @@ PAYOUTS_FILE = 'pending_payouts.json'
 BALANCES_FILE = 'balances.json'
 CONFIG_FILE = 'bot_config.json'
 
+def generate_stock_account():
+    names = ['ahmed', 'mohamed', 'khalid', 'zayn', 'james', 'omar', 'david', 'sarah', 'john']
+    email = f"{random.choice(names)}{random.randint(1990,2024)}@{random.choice(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'])}"
+    pwd = f"{''.join(random.choices(string.ascii_letters, k=6)).capitalize()}{random.randint(100,999)}!"
+    return {"id": email, "pwd": pwd, "created_at": datetime.now().isoformat()}
+
+def generate_secret_data(prod, ptype):
+    if ptype == "Activation Link":
+        token = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        if "Gemini" in prod: return f"https://one.google.com/redeem/gemini-advanced?token={token}"
+        elif "ChatGPT" in prod: return f"https://chatgpt.com/activate?code={token}"
+        elif "Claude" in prod: return f"https://claude.ai/claim?gift={token}"
+        elif "Canva" in prod: return f"https://canva.com/pro/redeem?code={token}"
+        elif "GitHub" in prod: return f"https://github.com/settings/copilot/redeem?key={token}"
+        else:
+            base = prod.split()[0].lower().replace('.', '')
+            return f"https://{base}.com/activate?key={token}"
+    elif ptype == "Gift Card":
+        pfx = prod.split()[0][:4].upper()
+        return f"{pfx}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+    return ""
+
 def init_db():
     if not os.path.exists(INVENTORY_FILE):
         inv = {}
@@ -43,7 +87,7 @@ def init_db():
                 inv[prod][t] = {}
                 for dur in durations:
                     if t == "Account":
-                        inv[prod][t][dur] = [{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(80)]
+                        inv[prod][t][dur] = [generate_stock_account() for _ in range(30)]
                     else:
                         inv[prod][t][dur] = 80
         with open(INVENTORY_FILE, 'w') as f: json.dump(inv, f, indent=4)
@@ -92,8 +136,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- واجهات التسليم وإظهار البيانات ---
-
 class RevealDataView(View):
     def __init__(self, order_id):
         super().__init__(timeout=None)
@@ -123,12 +165,12 @@ class AccountSelectDropdown(Select):
         for acc in accounts[:25]:
             created = datetime.fromisoformat(acc["created_at"])
             rem = max(1, total_days - (now - created).days)
-            options.append(discord.SelectOption(label=f"ID: {acc['id']}", description=f"{rem} Days Remaining", value=acc['id']))
+            options.append(discord.SelectOption(label=acc['id'], description=f"{rem} Days Remaining", value=acc['id']))
             
         if not options:
             options.append(discord.SelectOption(label="Out of Stock", value="empty"))
             
-        super().__init__(placeholder="Select an account to deliver...", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Select an account from stock...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "empty": return await interaction.response.send_message("❌ Stock is empty.", ephemeral=True)
@@ -144,8 +186,7 @@ class AccountSelectDropdown(Select):
         if selected_acc:
             accounts.remove(selected_acc)
             save_data(INVENTORY_FILE, inv)
-            pwd = ''.join(random.choices(string.ascii_letters, k=8)) + "!9"
-            acc_details = f"{selected_acc['id']}:{pwd}"
+            acc_details = f"{selected_acc['id']}:{selected_acc['pwd']}"
             
             sales = load_data(SALES_FILE)
             order["status"] = "DELIVERED"
@@ -157,7 +198,7 @@ class AccountSelectDropdown(Select):
             pending = [o for o in pending if o["oid"] != self.order_id]
             save_data(PENDING_APPROVAL_FILE, pending)
             
-            await interaction.response.send_message(f"✅ **Account {selected_acc['id']} Delivered!**", ephemeral=True)
+            await interaction.response.send_message(f"✅ **Account Delivered!**\n`{acc_details}`", ephemeral=True)
             self.view.stop_view()
             await interaction.message.edit(content="✅ Order fulfilled.", view=None, embed=interaction.message.embeds[0])
 
@@ -180,11 +221,10 @@ class ManualDeliveryView(View):
     async def deliver_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
         view = AccountSelectView(self.order_id, self.prod, self.duration)
-        await interaction.response.send_message("Select which account to give to the client:", view=view, ephemeral=True)
+        await interaction.response.send_message("Select an email from your stock:", view=view, ephemeral=True)
         button.disabled = True
         await interaction.message.edit(view=self)
 
-# --- نظام إدارة المخزون المتقدم ---
 class RestockModal(Modal):
     def __init__(self, prod_name=None):
         title = f"Restock {prod_name}" if prod_name else "Global Restock"
@@ -203,14 +243,14 @@ class RestockModal(Modal):
             for t in inv[p]:
                 for dur in inv[p][t]:
                     if t == "Account":
-                        inv[p][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
+                        inv[p][t][dur].extend([generate_stock_account() for _ in range(amt)])
                     else: inv[p][t][dur] += amt
         save_data(INVENTORY_FILE, inv)
         await interaction.response.send_message(f"✅ Stock added successfully.", ephemeral=True)
 
 class StockSelect(Select):
     def __init__(self):
-        options = [discord.SelectOption(label=p, value=p) for p in load_data(INVENTORY_FILE).keys()]
+        options = [discord.SelectOption(label=p, value=p) for p in list(load_data(INVENTORY_FILE).keys())[:25]]
         super().__init__(placeholder="Select product to restock...", min_values=1, max_values=1, options=options)
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(RestockModal(prod_name=self.values[0]))
@@ -240,7 +280,6 @@ class StorePanelView(View):
         if not is_authorized(interaction.user.id): return
         await interaction.response.send_message("Select a product to restock:", view=AdvancedStockView(), ephemeral=True)
 
-# --- نظام الشكاوى (Disputes & Refunds) ---
 class DisputeActionView(View):
     def __init__(self, order_id, remaining_days, prod, duration, issue_type):
         super().__init__(timeout=None)
@@ -250,13 +289,13 @@ class DisputeActionView(View):
         self.duration = duration
         self.issue_type = issue_type
 
-    @discord.ui.button(label="🔄 Replace from Stock", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="🔄 Auto-Replace (Calculated)", style=discord.ButtonStyle.green)
     async def replace_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
         if "Account" not in self.issue_type:
             await interaction.response.send_message(f"✅ Sent new Link/Key.", ephemeral=True)
         else:
-            await interaction.response.send_message(f"✅ Replacement sent! Valid for roughly **{self.remaining_days} days**.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Auto-Replacement issued for **{self.remaining_days} days**.", ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
@@ -274,7 +313,7 @@ class DisputeActionView(View):
             bals = load_data(BALANCES_FILE)
             if dest in bals: bals[dest] -= amt
             save_data(BALANCES_FILE, bals)
-            msg = f"✅ Refunded! Deducted `{amt}` from `{dest}`."
+            msg = f"✅ Refunded! Deducted `{amt:.2f}` from `{dest}`."
         else:
             payouts = [p for p in load_data(PAYOUTS_FILE) if p["oid"] != self.order_id]
             save_data(PAYOUTS_FILE, payouts)
@@ -293,7 +332,6 @@ class DisputeActionView(View):
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
-# --- الأوامر الرئيسية ---
 @bot.command(name="setpayout")
 async def set_payout(ctx, channel_id: int):
     if not is_authorized(ctx.author.id): return
@@ -403,7 +441,6 @@ async def stock_chats(ctx):
         embed.add_field(name=f"Order {acc['oid']} - {acc['prod']}", value=f"👤 Client: `{acc['masked_contact']}`\n⏳ Active: `{days} Days`", inline=False)
     await ctx.send(embed=embed)
 
-# --- العمليات التلقائية (Tasks) ---
 @tasks.loop(minutes=2)
 async def update_bot_status():
     sales = load_data(SALES_FILE)
@@ -418,8 +455,10 @@ async def background_sales():
     
     platform = random.choice(PLATFORMS)
     prod = random.choice(list(PRICES.keys()))
-    ptype = random.choice(["Account", "Activation Link", "Gift Card"])
-    duration = random.choice(["1 Month", "1 Year"])
+    ptype_options = list(PRICES[prod].keys())
+    ptype = random.choice(ptype_options)
+    duration_options = list(PRICES[prod][ptype].keys())
+    duration = random.choice(duration_options)
     price_usd = PRICES[prod][ptype][duration]
     
     inv = load_data(INVENTORY_FILE)
@@ -499,7 +538,7 @@ async def background_sales():
         
         order_data["status"] = "DELIVERED"
         order_data["delivered_at"] = datetime.now().isoformat()
-        secret_data = f"https://activate.com/{oid}" if ptype == "Activation Link" else f"GIFT-{random.randint(1000,9999)}"
+        secret_data = generate_secret_data(prod, ptype)
         order_data["item_data"] = secret_data
         
         sales = load_data(SALES_FILE)
