@@ -15,12 +15,11 @@ TOKEN = "MTU0MjY1MDY0MjI1NzE1NDE1OQ.GDNe66.-WTaZjCUcpax1LFuPEBdHwvUR9Wz8J7VO9x5B
 LOG_CHANNEL_ID = 1542647789685710848      
 TICKET_CHANNEL_ID = 1542650866987835484   
 STOCK_CHANNEL_ID = 1542650898432524378    
-PAYOUT_CHANNEL_ID = 1542965136288125029 # الروم الثابتة للمدفوعات
+PAYOUT_CHANNEL_ID = 1542965136288125029 # روم المدفوعات الثابتة
 AUTHORIZED_USERS = [1296895463097897015] 
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
 MY_WALLETS = {"USDT (TRC20)": 0.0, "BTC": 0.0, "LTC": 0.0, "Bank Account (SAR)": 0.0}
-
 CRYPTO_RATES = {"USDT (TRC20)": 1.0, "BTC": 64000.0, "LTC": 85.0}
 
 PRICES = {
@@ -56,8 +55,8 @@ PENDING_APPROVAL_FILE = 'pending_approval.json'
 PENDING_EVENTS_FILE = 'pending_events.json'
 PAYOUTS_FILE = 'pending_payouts.json'
 BALANCES_FILE = 'balances.json'
-CONFIG_FILE = 'bot_config.json'
 VALORANT_FILE = 'valorant_accounts.json'
+CONFIG_FILE = 'bot_config.json'
 
 def generate_stock_account():
     names = ['ahmed', 'mohamed', 'khalid', 'zayn', 'james', 'omar', 'david', 'sarah', 'john']
@@ -147,6 +146,27 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# --- أمر اختبار روم المدفوعات ---
+@bot.command(name="testpayout")
+async def test_payout(ctx):
+    if not is_authorized(ctx.author.id): return
+    # محاولة جلب الروم بطريقتين (Fetch ثم Get) لضمان رؤيتها
+    payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
+    if not payout_chan:
+        try:
+            payout_chan = await bot.fetch_channel(PAYOUT_CHANNEL_ID)
+        except:
+            payout_chan = None
+
+    if payout_chan:
+        embed = discord.Embed(title="💸 Test Payment Arrived!", description="روم المدفوعات ثابته ومربوطة بنجاح 100%", color=0x2ecc71)
+        embed.add_field(name="💰 Amount", value="`100.00 $`", inline=True)
+        embed.add_field(name="🏦 Wallet/Bank", value="`Test Bank`", inline=False)
+        await payout_chan.send(embed=embed)
+        await ctx.send(f"✅ Test message successfully sent to <#{PAYOUT_CHANNEL_ID}>!")
+    else:
+        await ctx.send(f"❌ Error: Cannot access channel `{PAYOUT_CHANNEL_ID}`. Make sure the bot has permissions in that room.")
+
 # --- أوامر فالورانت ---
 @bot.command(name="addval")
 async def add_valorant(ctx, name: str, user: str, password: str):
@@ -184,7 +204,7 @@ class StockExportSelect(Select):
         super().__init__(placeholder="Select product to view/export full stock...", min_values=1, max_values=1, options=options)
     
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True) # يمنع الإيرور
+        await interaction.response.defer(ephemeral=True)
         inv = load_data(INVENTORY_FILE)
         prod = self.values[0]
         data = inv[prod]
@@ -329,7 +349,7 @@ class ManualDeliveryView(View):
     @discord.ui.button(label="📦 Choose Account & Deliver", style=discord.ButtonStyle.primary)
     async def deliver_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
-        await interaction.response.defer(ephemeral=True) # حل مشكلة Timeout نهائياً
+        await interaction.response.defer(ephemeral=True)
         view = AccountSelectView(self.order_id, self.prod, self.duration, self.qty)
         await interaction.followup.send(f"Select {self.qty} account(s) from your stock:", view=view, ephemeral=True)
         button.disabled = True
@@ -455,6 +475,7 @@ async def system_menu(ctx):
     embed.add_field(name="`!order [ID]`", value="Full unmasked details + payment status.", inline=False)
     embed.add_field(name="`!wallets`", value="Check current funds in Bank & Crypto.", inline=False)
     embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
+    embed.add_field(name="`!testpayout`", value="Test sending a payment notice to room 1542965136288125029.", inline=False)
     embed.add_field(name="`!stock_chats`", value="View active delivered accounts.", inline=False)
     embed.add_field(name="`!top`", value="View top 5 best-selling products.", inline=False)
     embed.add_field(name="`!addval \"Name\" User Pass`", value="Add a public Valorant account.", inline=False)
@@ -521,7 +542,18 @@ async def force_pay(ctx, order_id: str):
     amt = order["actual_received"]
     if dest in bals: bals[dest] += amt
     save_data(BALANCES_FILE, bals)
-    await ctx.send(f"✅ **Forced Payment!** Added `{amt}` to `{dest}` wallet.")
+    
+    # إرسال إشعار فوري لروم المدفوعات عند عمل فورس باي
+    payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
+    if payout_chan:
+        symbol = "" if "Bank" in dest else "🪙"
+        embed = discord.Embed(title="💸 Payment Arrived (Forced)!", color=0x2ecc71)
+        embed.add_field(name="🏷️ Order ID", value=order['oid'], inline=True)
+        embed.add_field(name="💰 Amount", value=f"`{amt}`", inline=True)
+        embed.add_field(name="🏦 Wallet/Bank", value=f"{symbol} `{dest}`", inline=False)
+        await payout_chan.send(embed=embed)
+
+    await ctx.send(f"✅ **Forced Payment!** Added `{amt}` to `{dest}` wallet and notified payout channel.")
 
 @bot.command(name="stock_chats")
 async def stock_chats(ctx):
@@ -661,7 +693,7 @@ async def daily_report():
         log_chan = bot.get_channel(LOG_CHANNEL_ID)
         if log_chan:
             sales = load_data(SALES_FILE)
-            daily_sales = [s for s in sales if (datetime.now() - datetime.fromisoformat(s["created_at"])).total_seconds() <= 86400 and s.get("status") != "REFUNDED"]
+            daily_sales = [s for s in sales if (datetime.now() - datetime.fromisoformat(s["created_at"])).total_seconds() <= 86400 and s.get("status"] != "REFUNDED"]
             rev = sum(s.get("price", 0) for s in daily_sales)
             embed = discord.Embed(title="📈 Daily Automated Report", color=0x2ecc71)
             embed.add_field(name="Orders Completed", value=f"`{len(daily_sales)}`", inline=True)
@@ -674,10 +706,17 @@ async def daily_report():
 async def process_payouts():
     payouts, sales, pending = load_data(PAYOUTS_FILE), load_data(SALES_FILE), load_data(PENDING_APPROVAL_FILE)
     bals = load_data(BALANCES_FILE)
-    payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
-    remaining = []
     
+    payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
+    if not payout_chan:
+        try:
+            payout_chan = await bot.fetch_channel(PAYOUT_CHANNEL_ID)
+        except:
+            payout_chan = None
+
+    remaining = []
     now = datetime.now()
+    
     for p in payouts:
         if now >= datetime.fromisoformat(p["trigger_at"]):
             for lst in [sales, pending]:
