@@ -56,6 +56,7 @@ PENDING_EVENTS_FILE = 'pending_events.json'
 PAYOUTS_FILE = 'pending_payouts.json'
 BALANCES_FILE = 'balances.json'
 CONFIG_FILE = 'bot_config.json'
+VALORANT_FILE = 'valorant_accounts.json' # ملف حسابات فالورانت العامة
 
 def generate_stock_account():
     names = ['ahmed', 'mohamed', 'khalid', 'zayn', 'james', 'omar', 'david', 'sarah', 'john']
@@ -96,7 +97,7 @@ def init_db():
     if not os.path.exists(BALANCES_FILE):
         with open(BALANCES_FILE, 'w') as f: json.dump(MY_WALLETS, f, indent=4)
 
-    for file in [SALES_FILE, PENDING_APPROVAL_FILE, PENDING_EVENTS_FILE, PAYOUTS_FILE, CONFIG_FILE]:
+    for file in [SALES_FILE, PENDING_APPROVAL_FILE, PENDING_EVENTS_FILE, PAYOUTS_FILE, CONFIG_FILE, VALORANT_FILE]:
         if not os.path.exists(file):
             with open(file, 'w') as f: json.dump({} if file == CONFIG_FILE else [], f)
 
@@ -141,6 +142,41 @@ def generate_contact_info():
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- أوامر فالورانت الجديدة ---
+@bot.command(name="addval")
+async def add_valorant(ctx, name: str, user: str, password: str):
+    if not is_authorized(ctx.author.id): return
+    accs = load_data(VALORANT_FILE)
+    accs.append({"name": name, "user": user, "pass": password})
+    save_data(VALORANT_FILE, accs)
+    await ctx.send(f"✅ Valorant account `{name}` added successfully!")
+
+@bot.command(name="delval")
+async def del_valorant(ctx, name: str):
+    if not is_authorized(ctx.author.id): return
+    accs = load_data(VALORANT_FILE)
+    new_accs = [a for a in accs if a["name"].lower() != name.lower()]
+    if len(accs) == len(new_accs):
+        return await ctx.send(f"❌ Account `{name}` not found.")
+    save_data(VALORANT_FILE, new_accs)
+    await ctx.send(f"✅ Valorant account `{name}` deleted.")
+
+@bot.command(name="valorant")
+async def show_valorant(ctx):
+    accs = load_data(VALORANT_FILE)
+    if not accs:
+        return await ctx.send("❌ No public Valorant accounts available right now.")
+    
+    embed = discord.Embed(title="🎮 Public Valorant Accounts", color=0xfa4454)
+    for acc in accs:
+        embed.add_field(
+            name=f"📌 {acc['name']}",
+            value=f"**User:** `{acc['user']}`\n**Pass:** `{acc['pass']}`",
+            inline=False
+        )
+    embed.set_footer(text="AFK Cafe | Enjoy Playing!")
+    await ctx.send(embed=embed)
 
 # --- نظام تصدير وعرض المخزون الشامل (!stock) ---
 class StockExportSelect(Select):
@@ -423,6 +459,7 @@ async def system_menu(ctx):
     embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
     embed.add_field(name="`!stock_chats`", value="View active delivered accounts.", inline=False)
     embed.add_field(name="`!top`", value="View top 5 best-selling products.", inline=False)
+    embed.add_field(name="`!addval \"Name\" User Pass`", value="Add a public Valorant account.", inline=False)
     embed.set_footer(text="Zayn C. | Internal System")
     await ctx.send(embed=embed)
 
@@ -487,19 +524,6 @@ async def force_pay(ctx, order_id: str):
     if dest in bals: bals[dest] += amt
     save_data(BALANCES_FILE, bals)
     await ctx.send(f"✅ **Forced Payment!** Added `{amt}` to `{dest}` wallet.")
-
-@bot.command(name="check")
-async def check_stock_item(ctx, *, product_name: str):
-    if not is_authorized(ctx.author.id): return
-    inv = load_data(INVENTORY_FILE)
-    found = next((p for p in inv.keys() if p.lower() == product_name.lower()), None)
-    if not found: return await ctx.send("❌ Product not found.")
-    embed = discord.Embed(title=f"📦 Stock Check: {found}", color=0x3498db)
-    for ptype, durations in inv[found].items():
-        for dur, qty in durations.items():
-            count = len(qty) if isinstance(qty, list) else qty
-            embed.add_field(name=f"🔘 {ptype} ({dur})", value=f"`{count}` units", inline=True)
-    await ctx.send(embed=embed)
 
 @bot.command(name="stock_chats")
 async def stock_chats(ctx):
