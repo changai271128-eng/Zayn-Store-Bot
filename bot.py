@@ -20,6 +20,7 @@ AUTHORIZED_USERS = [1296895463097897015]
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
 MY_WALLETS = {"USDT (TRC20)": 0.0, "BTC": 0.0, "LTC": 0.0, "Bank Account (SAR)": 0.0}
+
 CRYPTO_RATES = {"USDT (TRC20)": 1.0, "BTC": 64000.0, "LTC": 85.0}
 
 PRICES = {
@@ -150,7 +151,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.command(name="testpayout")
 async def test_payout(ctx):
     if not is_authorized(ctx.author.id): return
-    # محاولة جلب الروم بطريقتين (Fetch ثم Get) لضمان رؤيتها
     payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
     if not payout_chan:
         try:
@@ -401,7 +401,7 @@ class StorePanelView(View):
         if not is_authorized(interaction.user.id): return
         await interaction.response.defer(ephemeral=True)
         sales = load_data(SALES_FILE)
-        valid = [s for s in sales if s.get("status") != "REFUNDED"]
+        valid = [s for s in sales if s.get("status"] != "REFUNDED"]
         rev = sum(s.get("price", 0) for s in valid)
         net = rev - sum(s.get("fee", 0) for s in valid)
         await interaction.followup.send(f"📊 **Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
@@ -543,7 +543,6 @@ async def force_pay(ctx, order_id: str):
     if dest in bals: bals[dest] += amt
     save_data(BALANCES_FILE, bals)
     
-    # إرسال إشعار فوري لروم المدفوعات عند عمل فورس باي
     payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
     if payout_chan:
         symbol = "" if "Bank" in dest else "🪙"
@@ -570,7 +569,7 @@ async def stock_chats(ctx):
 @tasks.loop(minutes=2)
 async def update_bot_status():
     sales = load_data(SALES_FILE)
-    valid_orders = len([s for s in sales if s.get("status") != "REFUNDED"])
+    valid_orders = len([s for s in sales if s.get("status"] != "REFUNDED"])
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"I love M | Serving {valid_orders} Clients"))
 
 @tasks.loop(minutes=1)
@@ -748,7 +747,7 @@ async def process_delayed_events():
     for e in events:
         if now >= datetime.fromisoformat(e["trigger_at"]):
             order = next((s for s in sales if s["oid"] == e["oid"]), None)
-            if order and order.get("status") == "DELIVERED":
+            if order and order.get("status"] == "DELIVERED":
                 days_used = (now - datetime.fromisoformat(order["delivered_at"])).days
                 rem_days = max(1, (30 if order["duration"] == "1 Month" else 365) - days_used)
                 embed = discord.Embed(title="🚨 Client Dispute", color=0xe74c3c)
