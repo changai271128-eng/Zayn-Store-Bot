@@ -15,6 +15,7 @@ TOKEN = "MTU0MjY1MDY0MjI1NzE1NDE1OQ.GDNe66.-WTaZjCUcpax1LFuPEBdHwvUR9Wz8J7VO9x5B
 LOG_CHANNEL_ID = 1542647789685710848      
 TICKET_CHANNEL_ID = 1542650866987835484   
 STOCK_CHANNEL_ID = 1542650898432524378    
+PAYOUT_CHANNEL_ID = 1542965136288125029 # الروم الثابتة للمدفوعات
 AUTHORIZED_USERS = [1296895463097897015] 
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
@@ -56,7 +57,7 @@ PENDING_EVENTS_FILE = 'pending_events.json'
 PAYOUTS_FILE = 'pending_payouts.json'
 BALANCES_FILE = 'balances.json'
 CONFIG_FILE = 'bot_config.json'
-VALORANT_FILE = 'valorant_accounts.json' # ملف حسابات فالورانت العامة
+VALORANT_FILE = 'valorant_accounts.json'
 
 def generate_stock_account():
     names = ['ahmed', 'mohamed', 'khalid', 'zayn', 'james', 'omar', 'david', 'sarah', 'john']
@@ -104,7 +105,10 @@ def init_db():
 init_db()
 
 def load_data(file):
-    with open(file, 'r') as f: return json.load(f)
+    try:
+        with open(file, 'r') as f: return json.load(f)
+    except:
+        return {} if file == CONFIG_FILE else []
 
 def save_data(file, data):
     with open(file, 'w') as f: json.dump(data, f, indent=4)
@@ -143,7 +147,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- أوامر فالورانت الجديدة ---
+# --- أوامر فالورانت ---
 @bot.command(name="addval")
 async def add_valorant(ctx, name: str, user: str, password: str):
     if not is_authorized(ctx.author.id): return
@@ -167,24 +171,20 @@ async def show_valorant(ctx):
     accs = load_data(VALORANT_FILE)
     if not accs:
         return await ctx.send("❌ No public Valorant accounts available right now.")
-    
     embed = discord.Embed(title="🎮 Public Valorant Accounts", color=0xfa4454)
     for acc in accs:
-        embed.add_field(
-            name=f"📌 {acc['name']}",
-            value=f"**User:** `{acc['user']}`\n**Pass:** `{acc['pass']}`",
-            inline=False
-        )
+        embed.add_field(name=f"📌 {acc['name']}", value=f"**User:** `{acc['user']}`\n**Pass:** `{acc['pass']}`", inline=False)
     embed.set_footer(text="AFK Cafe | Enjoy Playing!")
     await ctx.send(embed=embed)
 
-# --- نظام تصدير وعرض المخزون الشامل (!stock) ---
+# --- تصدير المخزون ---
 class StockExportSelect(Select):
     def __init__(self):
         options = [discord.SelectOption(label=p, value=p) for p in list(load_data(INVENTORY_FILE).keys())[:25]]
         super().__init__(placeholder="Select product to view/export full stock...", min_values=1, max_values=1, options=options)
     
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True) # يمنع الإيرور
         inv = load_data(INVENTORY_FILE)
         prod = self.values[0]
         data = inv[prod]
@@ -210,8 +210,7 @@ class StockExportSelect(Select):
         
         file_path = f"Stock_{prod.replace(' ', '_')}.txt"
         with open(file_path, "w", encoding="utf-8") as f: f.write(content)
-            
-        await interaction.response.send_message(f"✅ Here is the complete stock database for **{prod}**:", file=discord.File(file_path), ephemeral=True)
+        await interaction.followup.send(f"✅ Here is the complete stock database for **{prod}**:", file=discord.File(file_path), ephemeral=True)
         os.remove(file_path)
 
 class StockExportView(View):
@@ -246,7 +245,7 @@ async def top_products(ctx):
         embed.add_field(name=f"#{i} {prod}", value=f"`{qty}` units sold", inline=False)
     await ctx.send(embed=embed)
 
-# --- الواجهات والأوامر (Panel, Delivery, Disputes) ---
+# --- الواجهات ---
 class RevealDataView(View):
     def __init__(self, order_id):
         super().__init__(timeout=None)
@@ -255,10 +254,11 @@ class RevealDataView(View):
     @discord.ui.button(label="🔑 Reveal Data", style=discord.ButtonStyle.secondary)
     async def reveal_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
+        await interaction.response.defer(ephemeral=True)
         sales = load_data(SALES_FILE)
         order = next((s for s in sales if s["oid"] == self.order_id), None)
-        if not order: return await interaction.response.send_message("❌ Cannot fetch data.", ephemeral=True)
-        await interaction.response.send_message(f"🔒 **Delivered Data for {self.order_id}:**\n```\n{order['item_data']}\n```", ephemeral=True)
+        if not order: return await interaction.followup.send("❌ Cannot fetch data.", ephemeral=True)
+        await interaction.followup.send(f"🔒 **Delivered Data for {self.order_id}:**\n```\n{order['item_data']}\n```", ephemeral=True)
 
 class AccountSelectDropdown(Select):
     def __init__(self, order_id, prod, duration, qty, is_replace=False):
@@ -278,7 +278,8 @@ class AccountSelectDropdown(Select):
         super().__init__(placeholder=f"Select {max_v} account(s) from stock...", min_values=max_v, max_values=max_v, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "empty": return await interaction.response.send_message("❌ Stock is empty.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        if self.values[0] == "empty": return await interaction.followup.send("❌ Stock is empty.", ephemeral=True)
         
         inv = load_data(INVENTORY_FILE)
         accounts = inv[self.prod]["Account"][self.duration]
@@ -294,7 +295,7 @@ class AccountSelectDropdown(Select):
         joined_details = "\n".join(selected_details)
         
         if self.is_replace:
-            await interaction.response.send_message(f"✅ **Replacement Sent!**\nData:\n`{joined_details}`", ephemeral=True)
+            await interaction.followup.send(f"✅ **Replacement Sent!**\nData:\n`{joined_details}`", ephemeral=True)
         else:
             pending = load_data(PENDING_APPROVAL_FILE)
             order = next((o for o in pending if o["oid"] == self.order_id), None)
@@ -307,10 +308,10 @@ class AccountSelectDropdown(Select):
                 save_data(SALES_FILE, sales)
                 pending = [o for o in pending if o["oid"] != self.order_id]
                 save_data(PENDING_APPROVAL_FILE, pending)
-                await interaction.response.send_message(f"✅ **Account(s) Delivered!**\n`{joined_details}`", ephemeral=True)
+                await interaction.followup.send(f"✅ **Account(s) Delivered!**\n`{joined_details}`", ephemeral=True)
                 
         self.view.stop_view()
-        try: await interaction.message.edit(content="✅ Order fulfilled.", view=None, embed=interaction.message.embeds[0])
+        try: await interaction.message.edit(content="✅ Order fulfilled.", view=None)
         except: pass
 
 class AccountSelectView(View):
@@ -328,9 +329,11 @@ class ManualDeliveryView(View):
     @discord.ui.button(label="📦 Choose Account & Deliver", style=discord.ButtonStyle.primary)
     async def deliver_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
+        await interaction.response.defer(ephemeral=True) # حل مشكلة Timeout نهائياً
         view = AccountSelectView(self.order_id, self.prod, self.duration, self.qty)
-        await interaction.response.send_message(f"Select {self.qty} account(s) from your stock:", view=view, ephemeral=True)
+        await interaction.followup.send(f"Select {self.qty} account(s) from your stock:", view=view, ephemeral=True)
         button.disabled = True
+        button.label = "✅ Selection Opened"
         await interaction.message.edit(view=self)
 
 class RestockModal(Modal):
@@ -376,11 +379,12 @@ class StorePanelView(View):
     @discord.ui.button(label="📊 View Stats", style=discord.ButtonStyle.blurple)
     async def stats_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
+        await interaction.response.defer(ephemeral=True)
         sales = load_data(SALES_FILE)
         valid = [s for s in sales if s.get("status") != "REFUNDED"]
         rev = sum(s.get("price", 0) for s in valid)
         net = rev - sum(s.get("fee", 0) for s in valid)
-        await interaction.response.send_message(f"📊 **Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
+        await interaction.followup.send(f"📊 **Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
 
     @discord.ui.button(label="⚙️ Manage & Add Stock", style=discord.ButtonStyle.green)
     async def stock_btn(self, interaction: discord.Interaction, button: Button):
@@ -395,16 +399,17 @@ class DisputeActionView(View):
     @discord.ui.button(label="🔄 Manual Replace from Stock", style=discord.ButtonStyle.green)
     async def replace_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
+        await interaction.response.defer(ephemeral=True)
         if self.issue_type == "Account":
             view = AccountSelectView(self.order_id, self.prod, self.duration, qty=1, is_replace=True)
-            await interaction.response.send_message("Select an account to give as replacement:", view=view, ephemeral=True)
+            await interaction.followup.send("Select an account to give as replacement:", view=view, ephemeral=True)
         else:
             inv = load_data(INVENTORY_FILE)
             if len(inv[self.prod][self.issue_type][self.duration]) > 0:
                 new_item = inv[self.prod][self.issue_type][self.duration].pop(0)
                 save_data(INVENTORY_FILE, inv)
-                await interaction.response.send_message(f"✅ Sent new {self.issue_type}.\nData: `{new_item}`", ephemeral=True)
-            else: return await interaction.response.send_message("❌ Out of stock.", ephemeral=True)
+                await interaction.followup.send(f"✅ Sent new {self.issue_type}.\nData: `{new_item}`", ephemeral=True)
+            else: return await interaction.followup.send("❌ Out of stock.", ephemeral=True)
             
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
@@ -412,9 +417,10 @@ class DisputeActionView(View):
     @discord.ui.button(label="💸 Refund", style=discord.ButtonStyle.blurple)
     async def refund_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
+        await interaction.response.defer(ephemeral=True)
         sales = load_data(SALES_FILE)
         order = next((s for s in sales if s["oid"] == self.order_id), None)
-        if not order or order.get("status") == "REFUNDED": return await interaction.response.send_message("❌ Invalid or already refunded.", ephemeral=True)
+        if not order or order.get("status") == "REFUNDED": return await interaction.followup.send("❌ Invalid or already refunded.", ephemeral=True)
         
         dest = order["wallet_dest"]; amt = order["actual_received"]
         if order.get("payout_cleared"):
@@ -429,7 +435,7 @@ class DisputeActionView(View):
             
         order["status"] = "REFUNDED"
         save_data(SALES_FILE, sales)
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
@@ -439,14 +445,6 @@ class DisputeActionView(View):
         await interaction.response.send_message(f"❌ Dispute Rejected.", ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
-
-@bot.command(name="setpayout")
-async def set_payout(ctx, channel_id: int):
-    if not is_authorized(ctx.author.id): return
-    config = load_data(CONFIG_FILE)
-    config["payout_channel"] = channel_id
-    save_data(CONFIG_FILE, config)
-    await ctx.send(f"✅ Payout notifications will now be sent to <#{channel_id}>.")
 
 @bot.command(name="system")
 async def system_menu(ctx):
@@ -675,9 +673,8 @@ async def daily_report():
 @tasks.loop(minutes=2)
 async def process_payouts():
     payouts, sales, pending = load_data(PAYOUTS_FILE), load_data(SALES_FILE), load_data(PENDING_APPROVAL_FILE)
-    bals, config = load_data(BALANCES_FILE), load_data(CONFIG_FILE)
-    payout_chan_id = config.get("payout_channel")
-    payout_chan = bot.get_channel(payout_chan_id) if payout_chan_id else None
+    bals = load_data(BALANCES_FILE)
+    payout_chan = bot.get_channel(PAYOUT_CHANNEL_ID)
     remaining = []
     
     now = datetime.now()
