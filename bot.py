@@ -295,7 +295,7 @@ class AccountSelectDropdown(Select):
             
         if not options: options.append(discord.SelectOption(label="Out of Stock", value="empty"))
         max_v = min(self.qty, len(options), 25) if options[0].value != "empty" else 1
-        super().__init__(placeholder=f"Select {max_v} account(s) from stock...", min_values=max_v, max_values=max_v, options=options)
+        super().__init__(placeholder=f"Select {max_v} account(s) from stock...", min_values=1, max_values=max_v, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -401,7 +401,7 @@ class StorePanelView(View):
         if not is_authorized(interaction.user.id): return
         await interaction.response.defer(ephemeral=True)
         sales = load_data(SALES_FILE)
-        valid = [s for s in sales if s.get("status"] != "REFUNDED"]
+        valid = [s for s in sales if s.get("status") != "REFUNDED"]
         rev = sum(s.get("price", 0) for s in valid)
         net = rev - sum(s.get("fee", 0) for s in valid)
         await interaction.followup.send(f"📊 **Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
@@ -569,7 +569,7 @@ async def stock_chats(ctx):
 @tasks.loop(minutes=2)
 async def update_bot_status():
     sales = load_data(SALES_FILE)
-    valid_orders = len([s for s in sales if s.get("status"] != "REFUNDED"])
+    valid_orders = len([s for s in sales if s.get("status") != "REFUNDED"])
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"I love M | Serving {valid_orders} Clients"))
 
 @tasks.loop(minutes=1)
@@ -692,7 +692,7 @@ async def daily_report():
         log_chan = bot.get_channel(LOG_CHANNEL_ID)
         if log_chan:
             sales = load_data(SALES_FILE)
-            daily_sales = [s for s in sales if (datetime.now() - datetime.fromisoformat(s["created_at"])).total_seconds() <= 86400 and s.get("status"] != "REFUNDED"]
+            daily_sales = [s for s in sales if (datetime.now() - datetime.fromisoformat(s["created_at"])).total_seconds() <= 86400 and s.get("status") != "REFUNDED"]
             rev = sum(s.get("price", 0) for s in daily_sales)
             embed = discord.Embed(title="📈 Daily Automated Report", color=0x2ecc71)
             embed.add_field(name="Orders Completed", value=f"`{len(daily_sales)}`", inline=True)
