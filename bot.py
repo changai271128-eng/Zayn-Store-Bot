@@ -155,6 +155,44 @@ class DisputeActionView(View):
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
+    @discord.ui.button(label="💸 Refund", style=discord.ButtonStyle.blurple)
+    async def refund_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        
+        sales = load_data(SALES_FILE)
+        order = next((s for s in sales if s["oid"] == self.order_id), None)
+        if not order: return await interaction.response.send_message("❌ Order not found.", ephemeral=True)
+        if order.get("status") == "REFUNDED": return await interaction.response.send_message("⚠️ Already refunded.", ephemeral=True)
+        
+        amount = order["price"] - order.get("fee", 0)
+        dest = "Bank Account (SAR)" if "Credit" in order["method"] or "Bank" in order["method"] else order["method"].replace("Crypto (", "").replace(")", "")
+        deducted_amt = amount * 3.75 if "Bank" in dest else amount
+        
+        if order.get("payout_cleared"):
+            bals = load_data(BALANCES_FILE)
+            if dest in bals: bals[dest] -= deducted_amt
+            save_data(BALANCES_FILE, bals)
+            msg = f"✅ Refund issued! Deducted `{deducted_amt:.2f}` from `{dest}`."
+        else:
+            payouts = load_data(PAYOUTS_FILE)
+            payouts = [p for p in payouts if p["oid"] != self.order_id]
+            save_data(PAYOUTS_FILE, payouts)
+            msg = f"✅ Refund issued! Payment was still pending, cancelled arrival to `{dest}`."
+            
+        order["status"] = "REFUNDED"
+        save_data(SALES_FILE, sales)
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+        for child in self.children: child.disabled = True
+        await interaction.message.edit(view=self)
+
+    @discord.ui.button(label="❌ Reject Dispute", style=discord.ButtonStyle.red)
+    async def reject_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        await interaction.response.send_message(f"❌ Dispute for `{self.order_id}` was rejected.", ephemeral=True)
+        for child in self.children: child.disabled = True
+        await interaction.message.edit(view=self)
+
 class StorePanelView(View):
     def __init__(self): super().__init__(timeout=None)
 
@@ -203,7 +241,7 @@ async def force_pay(ctx, order_id: str):
     
     dest = "Bank Account (SAR)" if "Credit" in order["method"] or "Bank" in order["method"] else order["method"].replace("Crypto (", "").replace(")", "")
     amount = order["price"] - order.get("fee", 0)
-    if "Bank" in dest: amount *= 3.75 # Convert to SAR
+    if "Bank" in dest: amount *= 3.75 
     
     bals = load_data(BALANCES_FILE)
     if dest in bals: bals[dest] += amount
@@ -272,7 +310,7 @@ async def check_stock_item(ctx, *, product_name: str):
 
 @tasks.loop(minutes=10)
 async def background_sales():
-    if random.random() < 0.70: return # 30% chance for realistic pacing
+    if random.random() < 0.70: return 
     log_chan = bot.get_channel(LOG_CHANNEL_ID)
     if not log_chan: return
     
@@ -303,7 +341,7 @@ async def background_sales():
     elif method == "Bank Transfer":
         payout_delay, payout_dest = 4 * 60, "Bank Account (SAR)"
 
-    is_stuck = random.random() < 0.15 # 15% chance payment gets stuck
+    is_stuck = random.random() < 0.15 
     
     order_data = {
         "oid": oid, "platform": platform, "prod": prod, "type": ptype, 
@@ -343,7 +381,6 @@ async def background_sales():
         embed.add_field(name="🛒 Item", value=f"{prod} ({ptype})", inline=True)
         await log_chan.send(embed=embed)
 
-    # جدولة الشكاوى المتأخرة
     if random.random() < 0.40:
         events = load_data(PENDING_EVENTS_FILE)
         events.append({"oid": oid, "type": "Dispute", "trigger_at": (datetime.now() + timedelta(minutes=random.randint(60, 180))).isoformat()})
