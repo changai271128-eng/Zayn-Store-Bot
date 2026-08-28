@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands, tasks
-from discord.ui import View, Button
+from discord.ui import View, Button, Select, Modal, TextInput
 import random
 import json
 import os
@@ -14,7 +14,7 @@ TOKEN = "MTU0MjY1MDY0MjI1NzE1NDE1OQ.GDNe66.-WTaZjCUcpax1LFuPEBdHwvUR9Wz8J7VO9x5B
 LOG_CHANNEL_ID = 1542647789685710848      
 TICKET_CHANNEL_ID = 1542650866987835484   
 STOCK_CHANNEL_ID = 1542650898432524378    
-AUTHORIZED_USERS = [1296895463097897015] # Zayn C.
+AUTHORIZED_USERS = [1296895463097897015] 
 
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
 MY_WALLETS = {"USDT (TRC20)": 0.0, "BTC": 0.0, "LTC": 0.0, "Bank Account (SAR)": 0.0}
@@ -40,9 +40,9 @@ def init_db():
                 inv[prod][t] = {}
                 for dur in durations:
                     if t == "Account":
-                        inv[prod][t][dur] = [{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(15)]
+                        inv[prod][t][dur] = [{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(80)]
                     else:
-                        inv[prod][t][dur] = 100
+                        inv[prod][t][dur] = 80
         with open(INVENTORY_FILE, 'w') as f: json.dump(inv, f, indent=4)
         
     if not os.path.exists(BALANCES_FILE):
@@ -80,8 +80,7 @@ def get_account_from_stock(prod, duration, required_days=None):
     
     selected_acc = None
     if required_days:
-        best_match = None
-        min_diff = 999
+        best_match, min_diff = None, 999
         for acc in accounts:
             created = datetime.fromisoformat(acc["created_at"])
             rem_days = max(1, total_days - (now - created).days)
@@ -104,6 +103,58 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# --- نظام التعبئة المتقدم (Modals & Selects) ---
+class RestockModal(Modal):
+    def __init__(self, prod_name=None):
+        title = f"Restock {prod_name}" if prod_name else "Global Restock (All Items)"
+        super().__init__(title=title[:45])
+        self.prod_name = prod_name
+        self.amount_input = TextInput(label="Amount to Add", style=discord.TextStyle.short, placeholder="e.g. 50", required=True)
+        self.add_item(self.amount_input)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try: amt = int(self.amount_input.value)
+        except: return await interaction.response.send_message("❌ Please enter a valid number.", ephemeral=True)
+        
+        inv = load_data(INVENTORY_FILE)
+        if self.prod_name:
+            for t in inv[self.prod_name]:
+                for dur in inv[self.prod_name][t]:
+                    if t == "Account":
+                        inv[self.prod_name][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
+                    else:
+                        inv[self.prod_name][t][dur] += amt
+            msg = f"✅ Added `{amt}` fresh units to all variations of **{self.prod_name}**."
+        else:
+            for p in inv:
+                for t in inv[p]:
+                    for dur in inv[p][t]:
+                        if t == "Account":
+                            inv[p][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
+                        else:
+                            inv[p][t][dur] += amt
+            msg = f"✅ Global Restock: Added `{amt}` fresh units to **EVERYTHING**."
+            
+        save_data(INVENTORY_FILE, inv)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+class StockSelect(Select):
+    def __init__(self):
+        options = [discord.SelectOption(label=p, value=p) for p in load_data(INVENTORY_FILE).keys()]
+        super().__init__(placeholder="Select product to restock...", min_values=1, max_values=1, options=options)
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(RestockModal(prod_name=self.values[0]))
+
+class AdvancedStockView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(StockSelect())
+    
+    @discord.ui.button(label="🌐 Global Restock (Custom Amount)", style=discord.ButtonStyle.blurple, row=1)
+    async def global_btn(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(RestockModal(prod_name=None))
+
+# --- بقية الواجهات والأوامر ---
 class ManualDeliveryView(View):
     def __init__(self, order_id):
         super().__init__(timeout=None)
@@ -146,7 +197,7 @@ class DisputeActionView(View):
     async def replace_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
         if "Account" not in self.issue_type:
-            await interaction.response.send_message(f"✅ Sent new Auto-Generated Link/Key for {self.prod}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Sent new Link/Key for {self.prod}", ephemeral=True)
         else:
             acc_details, _ = get_account_from_stock(self.prod, self.duration, self.remaining_days)
             if not acc_details: return await interaction.response.send_message("❌ No suitable accounts left in stock.", ephemeral=True)
@@ -174,8 +225,7 @@ class DisputeActionView(View):
             save_data(BALANCES_FILE, bals)
             msg = f"✅ Refund issued! Deducted `{deducted_amt:.2f}` from `{dest}`."
         else:
-            payouts = load_data(PAYOUTS_FILE)
-            payouts = [p for p in payouts if p["oid"] != self.order_id]
+            payouts = [p for p in load_data(PAYOUTS_FILE) if p["oid"] != self.order_id]
             save_data(PAYOUTS_FILE, payouts)
             msg = f"✅ Refund issued! Payment was still pending, cancelled arrival to `{dest}`."
             
@@ -189,26 +239,26 @@ class DisputeActionView(View):
     @discord.ui.button(label="❌ Reject Dispute", style=discord.ButtonStyle.red)
     async def reject_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
-        await interaction.response.send_message(f"❌ Dispute for `{self.order_id}` was rejected.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Dispute Rejected.", ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
 class StorePanelView(View):
     def __init__(self): super().__init__(timeout=None)
 
-    @discord.ui.button(label="🔄 Quick Restock All (Fresh)", style=discord.ButtonStyle.gray, custom_id="btn_restock")
-    async def restock_button(self, interaction: discord.Interaction, button: Button):
+    @discord.ui.button(label="📊 View Stats", style=discord.ButtonStyle.blurple)
+    async def stats_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
-        inv = load_data(INVENTORY_FILE)
-        for p in inv:
-            for t in inv[p]:
-                for dur in inv[p][t]:
-                    if t == "Account":
-                        inv[p][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(20)])
-                    else:
-                        inv[p][t][dur] += 200
-        save_data(INVENTORY_FILE, inv)
-        await interaction.response.send_message("✅ Added **20 Fresh Accounts (30/365 Days)** & 200 Links/Cards to all products!", ephemeral=True)
+        sales = load_data(SALES_FILE)
+        valid = [s for s in sales if s.get("status") != "REFUNDED"]
+        rev = sum(s.get("price", 0) for s in valid)
+        net = rev - sum(s.get("fee", 0) for s in valid)
+        await interaction.response.send_message(f"📊 **Live Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
+
+    @discord.ui.button(label="⚙️ Manage Stock (Advanced)", style=discord.ButtonStyle.green)
+    async def stock_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        await interaction.response.send_message("Select a product to restock or use Global:", view=AdvancedStockView(), ephemeral=True)
 
 @bot.command(name="panel")
 async def panel_cmd(ctx):
@@ -234,7 +284,7 @@ async def force_pay(ctx, order_id: str):
     order = next((s for s in sales + pending if s["oid"] == order_id), None)
     if not order: return await ctx.send("❌ Order not found.")
     
-    if order["payout_cleared"]: return await ctx.send("⚠️ Payment was already cleared for this order.")
+    if order.get("payout_cleared"): return await ctx.send("⚠️ Payment was already cleared for this order.")
     
     order["payout_cleared"] = True
     save_data(SALES_FILE, sales); save_data(PENDING_APPROVAL_FILE, pending)
@@ -255,7 +305,7 @@ async def system_menu(ctx):
     embed = discord.Embed(title="⚙️ AFK Cafe | System Menu", color=0x2b2d31)
     embed.add_field(name="`!order [ID]`", value="Full unmasked details + payment status.", inline=False)
     embed.add_field(name="`!wallets`", value="Check current funds in Bank & Crypto.", inline=False)
-    embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck 'Unconfirmed' payment.", inline=False)
+    embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
     embed.add_field(name="`!check [Product]`", value="Check specific inventory stock.", inline=False)
     embed.add_field(name="`!stock_chats`", value="View active delivered accounts & aging.", inline=False)
     await ctx.send(embed=embed)
@@ -308,6 +358,13 @@ async def check_stock_item(ctx, *, product_name: str):
             embed.add_field(name=f"🔘 {ptype} ({dur})", value=f"`{count}` units", inline=True)
     await ctx.send(embed=embed)
 
+# --- المهام الخلفية المحدثة ---
+@tasks.loop(minutes=2)
+async def update_bot_status():
+    sales = load_data(SALES_FILE)
+    valid_orders = len([s for s in sales if s.get("status") != "REFUNDED"])
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"I love M | Serving {valid_orders} Clients"))
+
 @tasks.loop(minutes=10)
 async def background_sales():
     if random.random() < 0.70: return 
@@ -320,6 +377,17 @@ async def background_sales():
     duration = random.choice(["1 Month", "1 Year"])
     price = PRICES[prod][ptype][duration]
     
+    # التحقق من توفر المخزون قبل أي شيء وإرسال التنبيهات
+    inv = load_data(INVENTORY_FILE)
+    remaining = len(inv[prod][ptype][duration]) if ptype == "Account" else inv[prod][ptype][duration]
+    
+    if remaining <= 0:
+        msg = f"<@{AUTHORIZED_USERS[0]}> 🚨🚨 **OUT OF STOCK!** {prod} ({ptype} - {duration}) is empty! Restock NOW!"
+        await log_chan.send(msg); await log_chan.send(msg); await log_chan.send(msg)
+        return
+    elif remaining == 10:
+        await log_chan.send(f"<@{AUTHORIZED_USERS[0]}> ⚠️ **Low Stock Alert:** Only 10 left for {prod} ({ptype} - {duration})!")
+        
     promo_str = "None"
     if random.random() < 0.20:
         price = round(price * 0.90, 2); promo_str = random.choice(["SALE10", "WELCOME10"])
@@ -365,8 +433,7 @@ async def background_sales():
         embed.add_field(name="🛒 Item", value=f"{prod} ({duration})", inline=True)
         await log_chan.send(embed=embed, view=ManualDeliveryView(oid))
     else:
-        inv = load_data(INVENTORY_FILE)
-        if inv[prod][ptype][duration] > 0: inv[prod][ptype][duration] -= 1
+        inv[prod][ptype][duration] -= 1
         save_data(INVENTORY_FILE, inv)
         
         order_data["status"] = "DELIVERED"
@@ -418,7 +485,7 @@ async def process_delayed_events():
     for e in events:
         if now >= datetime.fromisoformat(e["trigger_at"]):
             order = next((s for s in sales if s["oid"] == e["oid"]), None)
-            if order and order["status"] == "DELIVERED":
+            if order and order.get("status") == "DELIVERED":
                 del_time = datetime.fromisoformat(order["delivered_at"])
                 days_used = (now - del_time).days
                 total_days = 30 if order["duration"] == "1 Month" else 365
@@ -440,6 +507,7 @@ async def on_ready():
     if not background_sales.is_running(): background_sales.start()
     if not process_payouts.is_running(): process_payouts.start()
     if not process_delayed_events.is_running(): process_delayed_events.start()
+    if not update_bot_status.is_running(): update_bot_status.start()
 
 app = Flask(__name__)
 @app.route('/')
