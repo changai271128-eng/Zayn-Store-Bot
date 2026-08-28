@@ -19,6 +19,8 @@ AUTHORIZED_USERS = [1296895463097897015]
 PLATFORMS = ['Salla', 'Zid', 'Telegram', 'Eldorado.gg', 'G2G.com']
 MY_WALLETS = {"USDT (TRC20)": 0.0, "BTC": 0.0, "LTC": 0.0, "Bank Account (SAR)": 0.0}
 
+CRYPTO_RATES = {"USDT (TRC20)": 1.0, "BTC": 64000.0, "LTC": 85.0}
+
 PRICES = {
     "ChatGPT Plus": {"Account": {"1 Month": 10.0, "1 Year": 90.0}, "Activation Link": {"1 Month": 12.0, "1 Year": 110.0}, "Gift Card": {"1 Month": 15.0, "1 Year": 150.0}},
     "Claude Pro": {"Account": {"1 Month": 18.0, "1 Year": 160.0}, "Activation Link": {"1 Month": 22.0, "1 Year": 200.0}, "Gift Card": {"1 Month": 25.0, "1 Year": 240.0}}
@@ -70,73 +72,140 @@ def generate_order_id(platform):
     elif platform == 'G2G.com': return f"G2G-{num}14"
     else: return f"TG-{num}"
 
-def get_account_from_stock(prod, duration, required_days=None):
-    inv = load_data(INVENTORY_FILE)
-    accounts = inv.get(prod, {}).get("Account", {}).get(duration, [])
-    if not accounts: return None, inv
-    
-    total_days = 30 if duration == "1 Month" else 365
-    now = datetime.now()
-    
-    selected_acc = None
-    if required_days:
-        best_match, min_diff = None, 999
-        for acc in accounts:
-            created = datetime.fromisoformat(acc["created_at"])
-            rem_days = max(1, total_days - (now - created).days)
-            diff = abs(rem_days - required_days)
-            if diff < min_diff:
-                min_diff = diff; best_match = acc
-        selected_acc = best_match
+def generate_contact_info():
+    if random.random() > 0.5:
+        names = ['ahmed', 'mohamed', 'khalid', 'zayn', 'james', 'omar', 'david']
+        f = random.choice(names)
+        full = f"{f}.{random.choice(names)}{random.randint(10,99)}@gmail.com"
+        masked = f"{full[:3]}***@gmail.com"
+        return full, masked, "Email"
     else:
-        selected_acc = accounts[0]
-        
-    if selected_acc:
-        accounts.remove(selected_acc)
-        save_data(INVENTORY_FILE, inv)
-        rem_days = max(1, total_days - (now - datetime.fromisoformat(selected_acc["created_at"])).days)
-        pwd = ''.join(random.choices(string.ascii_letters, k=8)) + "!9"
-        return f"{selected_acc['id']}:{pwd} (Remaining: {rem_days} Days)", inv
-    return None, inv
+        prefixes = [('+966', 9, '5'), ('+971', 9, '5'), ('+20', 10, '1'), ('+1', 10, ''), ('+965', 8, '6')]
+        code, length, start = random.choice(prefixes)
+        num = start + ''.join([str(random.randint(0,9)) for _ in range(length - len(start))])
+        full = f"{code}{num}"
+        masked = f"{code} {''.join(num[:2])}***{''.join(num[-3:])}"
+        return full, masked, "Phone"
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- نظام التعبئة المتقدم (Modals & Selects) ---
+# --- واجهات التسليم وإظهار البيانات ---
+
+class RevealDataView(View):
+    def __init__(self, order_id):
+        super().__init__(timeout=None)
+        self.order_id = order_id
+        
+    @discord.ui.button(label="🔑 Reveal Data", style=discord.ButtonStyle.secondary)
+    async def reveal_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        sales = load_data(SALES_FILE)
+        order = next((s for s in sales if s["oid"] == self.order_id), None)
+        if not order: return await interaction.response.send_message("❌ Cannot fetch data.", ephemeral=True)
+        await interaction.response.send_message(f"🔒 **Delivered Data for {self.order_id}:**\n```\n{order['item_data']}\n```", ephemeral=True)
+
+class AccountSelectDropdown(Select):
+    def __init__(self, order_id, prod, duration):
+        self.order_id = order_id
+        self.prod = prod
+        self.duration = duration
+        
+        inv = load_data(INVENTORY_FILE)
+        accounts = inv.get(prod, {}).get("Account", {}).get(duration, [])
+        options = []
+        
+        total_days = 30 if duration == "1 Month" else 365
+        now = datetime.now()
+        
+        for acc in accounts[:25]:
+            created = datetime.fromisoformat(acc["created_at"])
+            rem = max(1, total_days - (now - created).days)
+            options.append(discord.SelectOption(label=f"ID: {acc['id']}", description=f"{rem} Days Remaining", value=acc['id']))
+            
+        if not options:
+            options.append(discord.SelectOption(label="Out of Stock", value="empty"))
+            
+        super().__init__(placeholder="Select an account to deliver...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "empty": return await interaction.response.send_message("❌ Stock is empty.", ephemeral=True)
+        
+        pending = load_data(PENDING_APPROVAL_FILE)
+        order = next((o for o in pending if o["oid"] == self.order_id), None)
+        if not order: return await interaction.response.send_message("❌ Order not found.", ephemeral=True)
+        
+        inv = load_data(INVENTORY_FILE)
+        accounts = inv[self.prod]["Account"][self.duration]
+        selected_acc = next((a for a in accounts if a["id"] == self.values[0]), None)
+        
+        if selected_acc:
+            accounts.remove(selected_acc)
+            save_data(INVENTORY_FILE, inv)
+            pwd = ''.join(random.choices(string.ascii_letters, k=8)) + "!9"
+            acc_details = f"{selected_acc['id']}:{pwd}"
+            
+            sales = load_data(SALES_FILE)
+            order["status"] = "DELIVERED"
+            order["item_data"] = f"{order['full_contact']} -> {acc_details}"
+            order["delivered_at"] = datetime.now().isoformat()
+            sales.append(order)
+            save_data(SALES_FILE, sales)
+            
+            pending = [o for o in pending if o["oid"] != self.order_id]
+            save_data(PENDING_APPROVAL_FILE, pending)
+            
+            await interaction.response.send_message(f"✅ **Account {selected_acc['id']} Delivered!**", ephemeral=True)
+            self.view.stop_view()
+            await interaction.message.edit(content="✅ Order fulfilled.", view=None, embed=interaction.message.embeds[0])
+
+class AccountSelectView(View):
+    def __init__(self, order_id, prod, duration):
+        super().__init__(timeout=None)
+        self.add_item(AccountSelectDropdown(order_id, prod, duration))
+        
+    def stop_view(self):
+        for child in self.children: child.disabled = True
+
+class ManualDeliveryView(View):
+    def __init__(self, order_id, prod, duration):
+        super().__init__(timeout=None)
+        self.order_id = order_id
+        self.prod = prod
+        self.duration = duration
+
+    @discord.ui.button(label="📦 Choose Account & Deliver", style=discord.ButtonStyle.primary)
+    async def deliver_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        view = AccountSelectView(self.order_id, self.prod, self.duration)
+        await interaction.response.send_message("Select which account to give to the client:", view=view, ephemeral=True)
+        button.disabled = True
+        await interaction.message.edit(view=self)
+
+# --- نظام إدارة المخزون المتقدم ---
 class RestockModal(Modal):
     def __init__(self, prod_name=None):
-        title = f"Restock {prod_name}" if prod_name else "Global Restock (All Items)"
+        title = f"Restock {prod_name}" if prod_name else "Global Restock"
         super().__init__(title=title[:45])
         self.prod_name = prod_name
-        self.amount_input = TextInput(label="Amount to Add", style=discord.TextStyle.short, placeholder="e.g. 50", required=True)
+        self.amount_input = TextInput(label="Amount to Add", style=discord.TextStyle.short, placeholder="50", required=True)
         self.add_item(self.amount_input)
     
     async def on_submit(self, interaction: discord.Interaction):
         try: amt = int(self.amount_input.value)
-        except: return await interaction.response.send_message("❌ Please enter a valid number.", ephemeral=True)
+        except: return await interaction.response.send_message("❌ Valid number required.", ephemeral=True)
         
         inv = load_data(INVENTORY_FILE)
-        if self.prod_name:
-            for t in inv[self.prod_name]:
-                for dur in inv[self.prod_name][t]:
+        targets = [self.prod_name] if self.prod_name else inv.keys()
+        for p in targets:
+            for t in inv[p]:
+                for dur in inv[p][t]:
                     if t == "Account":
-                        inv[self.prod_name][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
-                    else:
-                        inv[self.prod_name][t][dur] += amt
-            msg = f"✅ Added `{amt}` fresh units to all variations of **{self.prod_name}**."
-        else:
-            for p in inv:
-                for t in inv[p]:
-                    for dur in inv[p][t]:
-                        if t == "Account":
-                            inv[p][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
-                        else:
-                            inv[p][t][dur] += amt
-            msg = f"✅ Global Restock: Added `{amt}` fresh units to **EVERYTHING**."
-            
+                        inv[p][t][dur].extend([{"id": f"ACC-{random.randint(1000,9999)}", "created_at": datetime.now().isoformat()} for _ in range(amt)])
+                    else: inv[p][t][dur] += amt
         save_data(INVENTORY_FILE, inv)
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.response.send_message(f"✅ Stock added successfully.", ephemeral=True)
 
 class StockSelect(Select):
     def __init__(self):
@@ -149,41 +218,28 @@ class AdvancedStockView(View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(StockSelect())
-    
-    @discord.ui.button(label="🌐 Global Restock (Custom Amount)", style=discord.ButtonStyle.blurple, row=1)
+    @discord.ui.button(label="🌐 Global Restock", style=discord.ButtonStyle.blurple, row=1)
     async def global_btn(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(RestockModal(prod_name=None))
 
-# --- بقية الواجهات والأوامر ---
-class ManualDeliveryView(View):
-    def __init__(self, order_id):
-        super().__init__(timeout=None)
-        self.order_id = order_id
+class StorePanelView(View):
+    def __init__(self): super().__init__(timeout=None)
 
-    @discord.ui.button(label="📦 Select Account from Stock", style=discord.ButtonStyle.primary)
-    async def deliver_btn(self, interaction: discord.Interaction, button: Button):
+    @discord.ui.button(label="📊 View Stats", style=discord.ButtonStyle.blurple)
+    async def stats_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
-        pending = load_data(PENDING_APPROVAL_FILE)
-        order = next((o for o in pending if o["oid"] == self.order_id), None)
-        if not order: return await interaction.response.send_message("❌ Order not found.", ephemeral=True)
-        
-        acc_details, _ = get_account_from_stock(order["prod"], order["duration"])
-        if not acc_details: return await interaction.response.send_message("❌ No accounts in stock!", ephemeral=True)
-        
         sales = load_data(SALES_FILE)
-        order["status"] = "DELIVERED"
-        order["item_data"] = f"{order['full_email']} -> {acc_details}"
-        order["delivered_at"] = datetime.now().isoformat()
-        sales.append(order)
-        save_data(SALES_FILE, sales)
-        
-        pending = [o for o in pending if o["oid"] != self.order_id]
-        save_data(PENDING_APPROVAL_FILE, pending)
-        
-        button.disabled = True; button.label = "✅ Delivered"
-        await interaction.message.edit(view=self)
-        await interaction.response.send_message(f"✅ **Account Delivered!**\nData: `{order['item_data']}`", ephemeral=True)
+        valid = [s for s in sales if s.get("status") != "REFUNDED"]
+        rev = sum(s.get("price", 0) for s in valid)
+        net = rev - sum(s.get("fee", 0) for s in valid)
+        await interaction.response.send_message(f"📊 **Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
 
+    @discord.ui.button(label="⚙️ Manage Stock", style=discord.ButtonStyle.green)
+    async def stock_btn(self, interaction: discord.Interaction, button: Button):
+        if not is_authorized(interaction.user.id): return
+        await interaction.response.send_message("Select a product to restock:", view=AdvancedStockView(), ephemeral=True)
+
+# --- نظام الشكاوى (Disputes & Refunds) ---
 class DisputeActionView(View):
     def __init__(self, order_id, remaining_days, prod, duration, issue_type):
         super().__init__(timeout=None)
@@ -197,41 +253,35 @@ class DisputeActionView(View):
     async def replace_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
         if "Account" not in self.issue_type:
-            await interaction.response.send_message(f"✅ Sent new Link/Key for {self.prod}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Sent new Link/Key.", ephemeral=True)
         else:
-            acc_details, _ = get_account_from_stock(self.prod, self.duration, self.remaining_days)
-            if not acc_details: return await interaction.response.send_message("❌ No suitable accounts left in stock.", ephemeral=True)
-            await interaction.response.send_message(f"✅ Replacement sent! Valid for roughly **{self.remaining_days} days**.\nData: `{acc_details}`", ephemeral=True)
-            
+            # هنا يمكنك تحسينها لتفتح Select Menu أيضاً للمتبقي
+            await interaction.response.send_message(f"✅ Replacement sent! Valid for roughly **{self.remaining_days} days**.", ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
     @discord.ui.button(label="💸 Refund", style=discord.ButtonStyle.blurple)
     async def refund_btn(self, interaction: discord.Interaction, button: Button):
         if not is_authorized(interaction.user.id): return
-        
         sales = load_data(SALES_FILE)
         order = next((s for s in sales if s["oid"] == self.order_id), None)
-        if not order: return await interaction.response.send_message("❌ Order not found.", ephemeral=True)
-        if order.get("status") == "REFUNDED": return await interaction.response.send_message("⚠️ Already refunded.", ephemeral=True)
+        if not order or order.get("status") == "REFUNDED": return await interaction.response.send_message("❌ Invalid or already refunded.", ephemeral=True)
         
-        amount = order["price"] - order.get("fee", 0)
-        dest = "Bank Account (SAR)" if "Credit" in order["method"] or "Bank" in order["method"] else order["method"].replace("Crypto (", "").replace(")", "")
-        deducted_amt = amount * 3.75 if "Bank" in dest else amount
+        dest = order["wallet_dest"]
+        amt = order["actual_received"]
         
         if order.get("payout_cleared"):
             bals = load_data(BALANCES_FILE)
-            if dest in bals: bals[dest] -= deducted_amt
+            if dest in bals: bals[dest] -= amt
             save_data(BALANCES_FILE, bals)
-            msg = f"✅ Refund issued! Deducted `{deducted_amt:.2f}` from `{dest}`."
+            msg = f"✅ Refunded! Deducted `{amt}` from `{dest}`."
         else:
             payouts = [p for p in load_data(PAYOUTS_FILE) if p["oid"] != self.order_id]
             save_data(PAYOUTS_FILE, payouts)
-            msg = f"✅ Refund issued! Payment was still pending, cancelled arrival to `{dest}`."
+            msg = f"✅ Refunded! Cancelled pending payout to `{dest}`."
             
         order["status"] = "REFUNDED"
         save_data(SALES_FILE, sales)
-        
         await interaction.response.send_message(msg, ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
@@ -243,27 +293,24 @@ class DisputeActionView(View):
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
-class StorePanelView(View):
-    def __init__(self): super().__init__(timeout=None)
-
-    @discord.ui.button(label="📊 View Stats", style=discord.ButtonStyle.blurple)
-    async def stats_btn(self, interaction: discord.Interaction, button: Button):
-        if not is_authorized(interaction.user.id): return
-        sales = load_data(SALES_FILE)
-        valid = [s for s in sales if s.get("status") != "REFUNDED"]
-        rev = sum(s.get("price", 0) for s in valid)
-        net = rev - sum(s.get("fee", 0) for s in valid)
-        await interaction.response.send_message(f"📊 **Live Stats:**\n- Valid Orders: `{len(valid)}`\n- Refunds: `{len(sales)-len(valid)}`\n- Gross: `${rev:.2f}`\n- Net: `${net:.2f}`", ephemeral=True)
-
-    @discord.ui.button(label="⚙️ Manage Stock (Advanced)", style=discord.ButtonStyle.green)
-    async def stock_btn(self, interaction: discord.Interaction, button: Button):
-        if not is_authorized(interaction.user.id): return
-        await interaction.response.send_message("Select a product to restock or use Global:", view=AdvancedStockView(), ephemeral=True)
+# --- الأوامر الرئيسية ---
+@bot.command(name="system")
+async def system_menu(ctx):
+    if not is_authorized(ctx.author.id): return
+    embed = discord.Embed(title="⚙️ AFK Cafe | System", color=0x2b2d31)
+    embed.add_field(name="`!panel`", value="Main Dashboard & Restock UI", inline=False)
+    embed.add_field(name="`!order [ID]`", value="Full unmasked details + payment status.", inline=False)
+    embed.add_field(name="`!wallets`", value="Check current funds in Bank & Crypto.", inline=False)
+    embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
+    embed.add_field(name="`!check [Product]`", value="Check specific inventory stock.", inline=False)
+    embed.set_footer(text="Zayn C. | Internal System")
+    await ctx.send(embed=embed)
 
 @bot.command(name="panel")
 async def panel_cmd(ctx):
     if not is_authorized(ctx.author.id): return
     embed = discord.Embed(title="⚙️ Store Dashboard", color=0x00FF00)
+    embed.set_footer(text="Zayn C. © 2026")
     await ctx.send(embed=embed, view=StorePanelView())
 
 @bot.command(name="wallets")
@@ -271,43 +318,11 @@ async def check_wallets(ctx):
     if not is_authorized(ctx.author.id): return
     bals = load_data(BALANCES_FILE)
     embed = discord.Embed(title="💼 AFK Cafe Finances", color=0xf1c40f)
-    embed.add_field(name="🏦 Bank Account", value=f"`{bals['Bank Account (SAR)']:.2f} SAR`", inline=False)
-    embed.add_field(name="🪙 USDT", value=f"`${bals['USDT (TRC20)']:.2f}`", inline=True)
-    embed.add_field(name="🪙 BTC", value=f"`${bals['BTC']:.2f}`", inline=True)
-    embed.add_field(name="🪙 LTC", value=f"`${bals['LTC']:.2f}`", inline=True)
-    await ctx.send(embed=embed)
-
-@bot.command(name="forcepay")
-async def force_pay(ctx, order_id: str):
-    if not is_authorized(ctx.author.id): return
-    sales, pending = load_data(SALES_FILE), load_data(PENDING_APPROVAL_FILE)
-    order = next((s for s in sales + pending if s["oid"] == order_id), None)
-    if not order: return await ctx.send("❌ Order not found.")
-    
-    if order.get("payout_cleared"): return await ctx.send("⚠️ Payment was already cleared for this order.")
-    
-    order["payout_cleared"] = True
-    save_data(SALES_FILE, sales); save_data(PENDING_APPROVAL_FILE, pending)
-    
-    dest = "Bank Account (SAR)" if "Credit" in order["method"] or "Bank" in order["method"] else order["method"].replace("Crypto (", "").replace(")", "")
-    amount = order["price"] - order.get("fee", 0)
-    if "Bank" in dest: amount *= 3.75 
-    
-    bals = load_data(BALANCES_FILE)
-    if dest in bals: bals[dest] += amount
-    save_data(BALANCES_FILE, bals)
-    
-    await ctx.send(f"✅ **Forced Payment!** Added `{amount:.2f}` to `{dest}` wallet.")
-
-@bot.command(name="system")
-async def system_menu(ctx):
-    if not is_authorized(ctx.author.id): return
-    embed = discord.Embed(title="⚙️ AFK Cafe | System Menu", color=0x2b2d31)
-    embed.add_field(name="`!order [ID]`", value="Full unmasked details + payment status.", inline=False)
-    embed.add_field(name="`!wallets`", value="Check current funds in Bank & Crypto.", inline=False)
-    embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
-    embed.add_field(name="`!check [Product]`", value="Check specific inventory stock.", inline=False)
-    embed.add_field(name="`!stock_chats`", value="View active delivered accounts & aging.", inline=False)
+    embed.add_field(name="🏦 Bank Account (SAR)", value=f"`{bals['Bank Account (SAR)']:.2f} SAR`", inline=False)
+    embed.add_field(name="🪙 USDT (TRC20)", value=f"`{bals['USDT (TRC20)']:.2f} USDT`", inline=True)
+    embed.add_field(name="🪙 BTC", value=f"`{bals['BTC']:.5f} BTC`", inline=True)
+    embed.add_field(name="🪙 LTC", value=f"`{bals['LTC']:.3f} LTC`", inline=True)
+    embed.set_footer(text="Zayn C. | Live Sync")
     await ctx.send(embed=embed)
 
 @bot.command(name="order")
@@ -317,33 +332,42 @@ async def check_order(ctx, order_id: str):
     order = next((s for s in sales + pending if s["oid"] == order_id), None)
     if not order: return await ctx.send(f"❌ Order `{order_id}` not found.")
     
-    embed = discord.Embed(title=f"🧾 Order: {order['oid']} ({order['platform']})", color=0x3498db)
-    embed.add_field(name="📧 Client", value=f"`{order['full_email']}`", inline=True)
+    embed = discord.Embed(title=f"🧾 Order: {order['oid']}", color=0x3498db)
+    embed.add_field(name="🌐 Platform", value=order['platform'], inline=True)
+    embed.add_field(name=f"👤 Client ({order['contact_type']})", value=f"`{order['full_contact']}`", inline=True)
     embed.add_field(name="🛒 Item", value=f"{order['prod']} ({order['type']}) - {order['duration']}", inline=False)
-    embed.add_field(name="💰 Paid", value=f"${order['price']} (Promo: {order.get('promo', 'None')})", inline=True)
     
+    embed.add_field(name="💰 Exact Paid Amount", value=f"`{order['exact_paid']}`", inline=True)
     payout_status = "✅ Arrived in Wallet" if order.get("payout_cleared") else "⚠️ Unconfirmed / Pending"
-    embed.add_field(name="💸 Payment Status", value=f"{order['method']} - {payout_status}", inline=False)
+    embed.add_field(name="💸 Payment Route", value=f"{order['method']} \n{payout_status}", inline=False)
+    
     embed.add_field(name="📌 Status", value=f"`{order['status']}`", inline=True)
     
     if order['status'] == 'DELIVERED':
         del_time = datetime.fromisoformat(order['delivered_at'])
         days_active = (datetime.now() - del_time).days
         embed.add_field(name="⏱️ Days Active", value=f"`{days_active} Days`", inline=True)
-        embed.add_field(name="🔑 Data", value=f"```\n{order['item_data']}\n```", inline=False)
+        embed.add_field(name="🔑 Unmasked Data", value=f"```\n{order['item_data']}\n```", inline=False)
     await ctx.send(embed=embed)
 
-@bot.command(name="stock_chats")
-async def stock_chats(ctx):
+@bot.command(name="forcepay")
+async def force_pay(ctx, order_id: str):
     if not is_authorized(ctx.author.id): return
-    sales = load_data(SALES_FILE)
-    active = [s for s in sales if s['type'] == 'Account' and s['status'] == 'DELIVERED']
-    if not active: return await ctx.send("📋 No active accounts.")
-    embed = discord.Embed(title="📱 Active Delivered Accounts", color=0x2ecc71)
-    for acc in active[-5:]:
-        days = (datetime.now() - datetime.fromisoformat(acc['delivered_at'])).days
-        embed.add_field(name=f"Order {acc['oid']} - {acc['prod']}", value=f"👤 Client: `{acc['masked_email']}`\n⏳ Active: `{days} Days`", inline=False)
-    await ctx.send(embed=embed)
+    sales, pending = load_data(SALES_FILE), load_data(PENDING_APPROVAL_FILE)
+    order = next((s for s in sales + pending if s["oid"] == order_id), None)
+    if not order: return await ctx.send("❌ Order not found.")
+    if order.get("payout_cleared"): return await ctx.send("⚠️ Payment was already cleared.")
+    
+    order["payout_cleared"] = True
+    save_data(SALES_FILE, sales); save_data(PENDING_APPROVAL_FILE, pending)
+    
+    bals = load_data(BALANCES_FILE)
+    dest = order["wallet_dest"]
+    amt = order["actual_received"]
+    if dest in bals: bals[dest] += amt
+    save_data(BALANCES_FILE, bals)
+    
+    await ctx.send(f"✅ **Forced Payment!** Added `{amt}` to `{dest}` wallet.")
 
 @bot.command(name="check")
 async def check_stock_item(ctx, *, product_name: str):
@@ -358,7 +382,19 @@ async def check_stock_item(ctx, *, product_name: str):
             embed.add_field(name=f"🔘 {ptype} ({dur})", value=f"`{count}` units", inline=True)
     await ctx.send(embed=embed)
 
-# --- المهام الخلفية المحدثة ---
+@bot.command(name="stock_chats")
+async def stock_chats(ctx):
+    if not is_authorized(ctx.author.id): return
+    sales = load_data(SALES_FILE)
+    active = [s for s in sales if s['type'] == 'Account' and s['status'] == 'DELIVERED']
+    if not active: return await ctx.send("📋 No active accounts.")
+    embed = discord.Embed(title="📱 Active Delivered Accounts", color=0x2ecc71)
+    for acc in active[-5:]:
+        days = (datetime.now() - datetime.fromisoformat(acc['delivered_at'])).days
+        embed.add_field(name=f"Order {acc['oid']} - {acc['prod']}", value=f"👤 Client: `{acc['masked_contact']}`\n⏳ Active: `{days} Days`", inline=False)
+    await ctx.send(embed=embed)
+
+# --- العمليات التلقائية (Tasks) ---
 @tasks.loop(minutes=2)
 async def update_bot_status():
     sales = load_data(SALES_FILE)
@@ -375,78 +411,95 @@ async def background_sales():
     prod = random.choice(list(PRICES.keys()))
     ptype = random.choice(["Account", "Activation Link", "Gift Card"])
     duration = random.choice(["1 Month", "1 Year"])
-    price = PRICES[prod][ptype][duration]
+    price_usd = PRICES[prod][ptype][duration]
     
-    # التحقق من توفر المخزون قبل أي شيء وإرسال التنبيهات
     inv = load_data(INVENTORY_FILE)
     remaining = len(inv[prod][ptype][duration]) if ptype == "Account" else inv[prod][ptype][duration]
     
     if remaining <= 0:
-        msg = f"<@{AUTHORIZED_USERS[0]}> 🚨🚨 **OUT OF STOCK!** {prod} ({ptype} - {duration}) is empty! Restock NOW!"
-        await log_chan.send(msg); await log_chan.send(msg); await log_chan.send(msg)
-        return
+        msg = f"<@{AUTHORIZED_USERS[0]}> 🚨 **OUT OF STOCK!** {prod} ({ptype} - {duration}) is empty!"
+        await log_chan.send(msg); return
     elif remaining == 10:
         await log_chan.send(f"<@{AUTHORIZED_USERS[0]}> ⚠️ **Low Stock Alert:** Only 10 left for {prod} ({ptype} - {duration})!")
         
     promo_str = "None"
     if random.random() < 0.20:
-        price = round(price * 0.90, 2); promo_str = random.choice(["SALE10", "WELCOME10"])
+        price_usd = round(price_usd * 0.90, 2); promo_str = random.choice(["SALE10", "WELCOME10"])
         
     oid = generate_order_id(platform)
-    names = ['ahmed', 'mohamed', 'james', 'omar', 'khaled']
-    full_email = f"{random.choice(names)}.{random.choice(names)}{random.randint(10,99)}@gmail.com"
-    masked_email = f"{full_email[:3]}***@gmail.com"
+    full_contact, masked_contact, contact_type = generate_contact_info()
 
-    method = random.choices(["Credit Card", "Crypto", "Bank Transfer"], weights=[50, 30, 20])[0]
-    fee, payout_delay, payout_dest = 0, 0, ""
+    method = random.choices(["Credit Card", "Bank Transfer", "Crypto"], weights=[40, 30, 30])[0]
+    payout_delay = 0
+    payout_dest = ""
+    exact_paid = ""
+    actual_received = 0.0
     
-    if method == "Credit Card":
-        fee = round((price * 0.029) + 0.30, 2)
-        payout_delay, payout_dest = 12 * 60, "Bank Account (SAR)"
-    elif method == "Crypto":
+    if method in ["Credit Card", "Bank Transfer"]:
+        currency = random.choice(["SAR", "AED", "USD"])
+        if currency == "SAR": paid_amt = price_usd * 3.75; symbol = "SAR"
+        elif currency == "AED": paid_amt = price_usd * 3.67; symbol = "AED"
+        else: paid_amt = price_usd; symbol = "$"
+        exact_paid = f"{paid_amt:.2f} {symbol}"
+        
+        actual_received = price_usd * 3.75 
+        payout_dest = "Bank Account (SAR)"
+        payout_delay = 12 * 60 if method == "Credit Card" else 4 * 60
+    else:
         coin = random.choice(["USDT (TRC20)", "BTC", "LTC"])
-        payout_delay, payout_dest, method = 5, coin, f"Crypto ({coin})"
-    elif method == "Bank Transfer":
-        payout_delay, payout_dest = 4 * 60, "Bank Account (SAR)"
+        crypto_amt = price_usd / CRYPTO_RATES[coin]
+        exact_paid = f"{crypto_amt:.5f} {coin} (~${price_usd})"
+        actual_received = crypto_amt
+        payout_dest = coin
+        method = f"Crypto ({coin})"
+        payout_delay = 5
 
+    fee = round(actual_received * 0.029, 2) if "Credit" in method else 0
     is_stuck = random.random() < 0.15 
     
     order_data = {
         "oid": oid, "platform": platform, "prod": prod, "type": ptype, 
-        "duration": duration, "price": price, "fee": fee, "method": method,
-        "full_email": full_email, "masked_email": masked_email, "promo": promo_str,
-        "payout_cleared": False, "created_at": datetime.now().isoformat()
+        "duration": duration, "price": price_usd, "fee": fee, "method": method,
+        "exact_paid": exact_paid, "actual_received": actual_received, "wallet_dest": payout_dest,
+        "full_contact": full_contact, "masked_contact": masked_contact, "contact_type": contact_type,
+        "promo": promo_str, "payout_cleared": False, "created_at": datetime.now().isoformat()
     }
     
     if not is_stuck:
         payouts = load_data(PAYOUTS_FILE)
-        payouts.append({"oid": oid, "amount": price - fee, "method": method, "dest": payout_dest, "trigger_at": (datetime.now() + timedelta(minutes=payout_delay)).isoformat()})
+        payouts.append({"oid": oid, "amount": actual_received - fee, "dest": payout_dest, "trigger_at": (datetime.now() + timedelta(minutes=payout_delay)).isoformat()})
         save_data(PAYOUTS_FILE, payouts)
     
+    # تصميم الأوردر الفخم
+    embed = discord.Embed(title="🛒 New Order Received!", color=0x00FF00 if ptype != "Account" else 0xf1c40f)
+    embed.add_field(name="🌐 Platform", value=platform, inline=True)
+    embed.add_field(name="🏷️ Order ID", value=oid, inline=True)
+    embed.add_field(name="📦 Product", value=f"**{prod}**\n{ptype} ({duration})", inline=False)
+    embed.add_field(name="💳 Paid Amount", value=f"`{exact_paid}`", inline=True)
+    embed.add_field(name=f"👤 Client ({contact_type})", value=f"`{masked_contact}`", inline=True)
+
     if ptype == "Account":
         order_data["status"] = "PENDING_APPROVAL"
         pending = load_data(PENDING_APPROVAL_FILE)
         pending.append(order_data)
         save_data(PENDING_APPROVAL_FILE, pending)
-        embed = discord.Embed(title="⏳ New Account Order", color=0xf1c40f)
-        embed.add_field(name="🏷️ ID", value=oid, inline=True)
-        embed.add_field(name="🛒 Item", value=f"{prod} ({duration})", inline=True)
-        await log_chan.send(embed=embed, view=ManualDeliveryView(oid))
+        embed.add_field(name="📌 Action Required", value="Awaiting your approval to assign an account.", inline=False)
+        await log_chan.send(embed=embed, view=ManualDeliveryView(oid, prod, duration))
     else:
         inv[prod][ptype][duration] -= 1
         save_data(INVENTORY_FILE, inv)
         
         order_data["status"] = "DELIVERED"
         order_data["delivered_at"] = datetime.now().isoformat()
-        order_data["item_data"] = f"https://activate.com/{oid}" if ptype == "Activation Link" else f"GIFT-{random.randint(1000,9999)}"
+        secret_data = f"https://activate.com/{oid}" if ptype == "Activation Link" else f"GIFT-{random.randint(1000,9999)}"
+        order_data["item_data"] = secret_data
+        
         sales = load_data(SALES_FILE)
         sales.append(order_data)
         save_data(SALES_FILE, sales)
         
-        embed = discord.Embed(title="⚡ Auto-Delivered Order", color=0x2ecc71)
-        embed.add_field(name="🏷️ ID", value=oid, inline=True)
-        embed.add_field(name="🛒 Item", value=f"{prod} ({ptype})", inline=True)
-        await log_chan.send(embed=embed)
+        embed.set_footer(text="Auto-Delivered instantly to client.")
+        await log_chan.send(embed=embed, view=RevealDataView(oid))
 
     if random.random() < 0.40:
         events = load_data(PENDING_EVENTS_FILE)
@@ -466,8 +519,7 @@ async def process_payouts():
                 for o in lst:
                     if o["oid"] == p["oid"]: o["payout_cleared"] = True
             
-            amt = p["amount"] * 3.75 if "Bank" in p["dest"] else p["amount"]
-            if p["dest"] in bals: bals[p["dest"]] += amt
+            if p["dest"] in bals: bals[p["dest"]] += p["amount"]
         else:
             remaining.append(p)
             
