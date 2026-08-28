@@ -32,6 +32,7 @@ PENDING_APPROVAL_FILE = 'pending_approval.json'
 PENDING_EVENTS_FILE = 'pending_events.json'
 PAYOUTS_FILE = 'pending_payouts.json'
 BALANCES_FILE = 'balances.json'
+CONFIG_FILE = 'bot_config.json'
 
 def init_db():
     if not os.path.exists(INVENTORY_FILE):
@@ -50,9 +51,9 @@ def init_db():
     if not os.path.exists(BALANCES_FILE):
         with open(BALANCES_FILE, 'w') as f: json.dump(MY_WALLETS, f, indent=4)
 
-    for file in [SALES_FILE, PENDING_APPROVAL_FILE, PENDING_EVENTS_FILE, PAYOUTS_FILE]:
+    for file in [SALES_FILE, PENDING_APPROVAL_FILE, PENDING_EVENTS_FILE, PAYOUTS_FILE, CONFIG_FILE]:
         if not os.path.exists(file):
-            with open(file, 'w') as f: json.dump([], f)
+            with open(file, 'w') as f: json.dump({} if file == CONFIG_FILE else [], f)
 
 init_db()
 
@@ -255,7 +256,6 @@ class DisputeActionView(View):
         if "Account" not in self.issue_type:
             await interaction.response.send_message(f"✅ Sent new Link/Key.", ephemeral=True)
         else:
-            # هنا يمكنك تحسينها لتفتح Select Menu أيضاً للمتبقي
             await interaction.response.send_message(f"✅ Replacement sent! Valid for roughly **{self.remaining_days} days**.", ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
@@ -294,6 +294,14 @@ class DisputeActionView(View):
         await interaction.message.edit(view=self)
 
 # --- الأوامر الرئيسية ---
+@bot.command(name="setpayout")
+async def set_payout(ctx, channel_id: int):
+    if not is_authorized(ctx.author.id): return
+    config = load_data(CONFIG_FILE)
+    config["payout_channel"] = channel_id
+    save_data(CONFIG_FILE, config)
+    await ctx.send(f"✅ Payout notifications will now be sent to <#{channel_id}>.")
+
 @bot.command(name="system")
 async def system_menu(ctx):
     if not is_authorized(ctx.author.id): return
@@ -303,6 +311,7 @@ async def system_menu(ctx):
     embed.add_field(name="`!wallets`", value="Check current funds in Bank & Crypto.", inline=False)
     embed.add_field(name="`!forcepay [ID]`", value="Manually clear a stuck payment.", inline=False)
     embed.add_field(name="`!check [Product]`", value="Check specific inventory stock.", inline=False)
+    embed.add_field(name="`!setpayout [Room ID]`", value="Set the room for payment arrival alerts.", inline=False)
     embed.set_footer(text="Zayn C. | Internal System")
     await ctx.send(embed=embed)
 
@@ -470,7 +479,6 @@ async def background_sales():
         payouts.append({"oid": oid, "amount": actual_received - fee, "dest": payout_dest, "trigger_at": (datetime.now() + timedelta(minutes=payout_delay)).isoformat()})
         save_data(PAYOUTS_FILE, payouts)
     
-    # تصميم الأوردر الفخم
     embed = discord.Embed(title="🛒 New Order Received!", color=0x00FF00 if ptype != "Account" else 0xf1c40f)
     embed.add_field(name="🌐 Platform", value=platform, inline=True)
     embed.add_field(name="🏷️ Order ID", value=oid, inline=True)
@@ -510,6 +518,9 @@ async def background_sales():
 async def process_payouts():
     payouts, sales, pending = load_data(PAYOUTS_FILE), load_data(SALES_FILE), load_data(PENDING_APPROVAL_FILE)
     bals = load_data(BALANCES_FILE)
+    config = load_data(CONFIG_FILE)
+    payout_chan_id = config.get("payout_channel")
+    payout_chan = bot.get_channel(payout_chan_id) if payout_chan_id else None
     remaining = []
     
     now = datetime.now()
@@ -519,7 +530,16 @@ async def process_payouts():
                 for o in lst:
                     if o["oid"] == p["oid"]: o["payout_cleared"] = True
             
-            if p["dest"] in bals: bals[p["dest"]] += p["amount"]
+            if p["dest"] in bals: 
+                bals[p["dest"]] += p["amount"]
+                
+            if payout_chan:
+                symbol = "" if "Bank" in p["dest"] else "🪙"
+                embed = discord.Embed(title="💸 Payment Arrived!", color=0x2ecc71)
+                embed.add_field(name="🏷️ Order ID", value=p["oid"], inline=True)
+                embed.add_field(name="💰 Amount", value=f"`{p['amount']}`", inline=True)
+                embed.add_field(name="🏦 Wallet/Bank", value=f"{symbol} `{p['dest']}`", inline=False)
+                await payout_chan.send(embed=embed)
         else:
             remaining.append(p)
             
