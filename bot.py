@@ -747,7 +747,7 @@ async def process_delayed_events():
     for e in events:
         if now >= datetime.fromisoformat(e["trigger_at"]):
             order = next((s for s in sales if s["oid"] == e["oid"]), None)
-            if order and order.get("status"] == "DELIVERED":
+            if order and order.get("status") == "DELIVERED":
                 days_used = (now - datetime.fromisoformat(order["delivered_at"])).days
                 rem_days = max(1, (30 if order["duration"] == "1 Month" else 365) - days_used)
                 embed = discord.Embed(title="🚨 Client Dispute", color=0xe74c3c)
