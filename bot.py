@@ -10,7 +10,7 @@ from flask import Flask
 from threading import Thread
 import asyncio
 
-TOKEN = "MTU0MjY1MDY0MjI1NzE1NDE1OQ.GZOQgw.EoXMPf6pZrhGyKzFqV-_8Upp-hBPNPGAmVK7yI"
+TOKEN = "
 
 LOG_CHANNEL_ID = 1542647789685710848      
 TICKET_CHANNEL_ID = 1542650866987835484   
